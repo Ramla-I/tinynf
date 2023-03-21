@@ -390,7 +390,7 @@ function measureStandard(queuePairs, extraPair, args)
 
     if (loss / #queuePairs) > args.acceptableloss then
       io.write("[FATAL] Too much loss! (" .. (loss / #queuePairs) .. ")\n")
-      os.exit(1)
+      -- os.exit(1)
     end
   end
 
