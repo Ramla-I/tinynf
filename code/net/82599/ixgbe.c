@@ -510,7 +510,7 @@ bool tn_net_device_init(const struct tn_pci_address pci_address, struct tn_net_d
 	// According to https://cateee.net/lkddb/web-lkddb/IXGBE.html, this means vendor ID (bottom 16 bits) 8086, device ID (top 16 bits) 10FB
 	// (Section 9.3.3.2 Device ID Register mentions 0x10D8 as the default, but the card has to overwrite that default with its actual ID)
 	uint32_t pci_id = pcireg_read(pci_address, PCIREG_ID);
-	if (pci_id != ((0x10FBu << 16) | 0x8086u)) {
+	if ((pci_id != ((0x10FBu << 16) | 0x8086u)) && (pci_id != ((0x154Du << 16) | 0x8086u))) {
 		TN_DEBUG("PCI device is not what was expected");
 		return false;
 	}
