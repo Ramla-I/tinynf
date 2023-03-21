@@ -55,25 +55,25 @@ else
   ./bind-devices-to-uio.sh $DUT_DEVS
 fi
 
-if [ ! -d 'moongen' ]; then
-  git clone --recurse-submodules 'https://github.com/emmericp/MoonGen' 'moongen'
-  if [ $? -ne 0 ]; then
-    echo '[FATAL] Could not clone MoonGen'
-    exit 1
-  fi
+# if [ ! -d 'moongen' ]; then
+#   git clone --recurse-submodules 'https://github.com/emmericp/MoonGen' 'moongen'
+#   if [ $? -ne 0 ]; then
+#     echo '[FATAL] Could not clone MoonGen'
+#     exit 1
+#   fi
 
-  git -C 'moongen' checkout '525d9917c98a4760db72bb733cf6ad30550d6669'
-  if [ $? -ne 0 ]; then
-    echo '[FATAL] Could not check out the MoonGen commit'
-    exit 1
-  fi
-fi
+#   git -C 'moongen' checkout '525d9917c98a4760db72bb733cf6ad30550d6669'
+#   if [ $? -ne 0 ]; then
+#     echo '[FATAL] Could not check out the MoonGen commit'
+#     exit 1
+#   fi
+# fi
 
-rsync -a -q . "$TESTER_HOST:$REMOTE_FOLDER_NAME"
-if [ $? -ne 0 ]; then
-  echo '[FATAL] Could not copy scripts'
-  exit 1
-fi
+# rsync -a -q . "$TESTER_HOST:$REMOTE_FOLDER_NAME"
+# if [ $? -ne 0 ]; then
+#   echo '[FATAL] Could not copy scripts'
+#   exit 1
+# fi
 
 echo '[bench] Building and running the NF...'
 
@@ -108,20 +108,20 @@ if [ -z "$NF_PID" ]; then
   exit 1
 fi
 
-ssh "$TESTER_HOST" "cd $REMOTE_FOLDER_NAME; ./bench-tester.sh $@"
-if [ $? -eq 0 ]; then
-  scp -r "$TESTER_HOST:$REMOTE_FOLDER_NAME/results" . >/dev/null 2>&1
-  if [ $? -eq 0 ]; then
-    echo "[bench] Done! Results are in the results/ folder, and the log in $LOG_FILE, in the same directory as $0"
-    RESULT=0
-  else
-    echo '[FATAL] Could not fetch result'
-    RESULT=1
-  fi
-else
-  echo '[FATAL] Run failed'
-  RESULT=1
-fi
+# ssh "$TESTER_HOST" "cd $REMOTE_FOLDER_NAME; ./bench-tester.sh $@"
+# if [ $? -eq 0 ]; then
+#   scp -r "$TESTER_HOST:$REMOTE_FOLDER_NAME/results" . >/dev/null 2>&1
+#   if [ $? -eq 0 ]; then
+#     echo "[bench] Done! Results are in the results/ folder, and the log in $LOG_FILE, in the same directory as $0"
+#     RESULT=0
+#   else
+#     echo '[FATAL] Could not fetch result'
+#     RESULT=1
+#   fi
+# else
+#   echo '[FATAL] Run failed'
+#   RESULT=1
+# fi
 
 # Ensure we always kill the NF at the end, even in cases of failure
 cleanup
