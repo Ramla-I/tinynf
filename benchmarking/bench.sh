@@ -38,7 +38,8 @@ NF_NAME="$(make -C "$NF_DIR" -f "$BENCH_MAKEFILE_NAME" -s print-nf-name)" # -s t
 cleanup()
 {
   sudo pkill -x -9 "$NF_NAME" >/dev/null 2>&1;
-  ssh "$TESTER_HOST" "sudo pkill -9 MoonGen"
+  # ssh "$TESTER_HOST" 
+  "sudo pkill -9 MoonGen"
 }
 
 # Clean up already, in case some old stuff is still running
@@ -47,13 +48,13 @@ cleanup
 # Delete any hugepages in case some program left them around
 sudo rm -f "$(grep hugetlbfs /proc/mounts  | awk '{print $2}')"/*
 
-# Initialize DPDK if needed
-make -C "$NF_DIR" -f "$BENCH_MAKEFILE_NAME" -q is-dpdk >/dev/null 2>&1
-if [ $? -eq 2 ]; then
-  ./unbind-devices.sh $DUT_DEVS
-else
-  ./bind-devices-to-uio.sh $DUT_DEVS
-fi
+# # Initialize DPDK if needed
+# make -C "$NF_DIR" -f "$BENCH_MAKEFILE_NAME" -q is-dpdk >/dev/null 2>&1
+# if [ $? -eq 2 ]; then
+#   ./unbind-devices.sh $DUT_DEVS
+# else
+#   ./bind-devices-to-uio.sh $DUT_DEVS
+# fi
 
 if [ ! -d 'moongen' ]; then
   git clone --recurse-submodules 'https://github.com/emmericp/MoonGen' 'moongen'
@@ -112,14 +113,14 @@ fi
 # "cd $REMOTE_FOLDER_NAME; 
 "./bench-tester.sh $@"
 if [ $? -eq 0 ]; then
-  scp -r "$TESTER_HOST:$REMOTE_FOLDER_NAME/results" . >/dev/null 2>&1
-  if [ $? -eq 0 ]; then
+  # scp -r "$TESTER_HOST:$REMOTE_FOLDER_NAME/results" . >/dev/null 2>&1
+  # if [ $? -eq 0 ]; then
     echo "[bench] Done! Results are in the results/ folder, and the log in $LOG_FILE, in the same directory as $0"
     RESULT=0
-  else
-    echo '[FATAL] Could not fetch result'
-    RESULT=1
-  fi
+  # else
+  #   echo '[FATAL] Could not fetch result'
+  #   RESULT=1
+  # fi
 else
   echo '[FATAL] Run failed'
   RESULT=1
