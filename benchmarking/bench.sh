@@ -69,46 +69,48 @@ if [ ! -d 'moongen' ]; then
   fi
 fi
 
-rsync -a -q . "$TESTER_HOST:$REMOTE_FOLDER_NAME"
-if [ $? -ne 0 ]; then
-  echo '[FATAL] Could not copy scripts'
-  exit 1
-fi
+# rsync -a -q . "$TESTER_HOST:$REMOTE_FOLDER_NAME"
+# if [ $? -ne 0 ]; then
+#   echo '[FATAL] Could not copy scripts'
+#   exit 1
+# fi
 
-echo '[bench] Building and running the NF...'
+# echo '[bench] Building and running the NF...'
 
-TN_ARGS="$DUT_DEVS" make -C "$NF_DIR" -f "$BENCH_MAKEFILE_NAME" build >"$LOG_FILE" 2>&1
-if [ $? -ne 0 ]; then
-  echo "[FATAL] Could not build; the $LOG_FILE file in the same directory as $0 may be useful"
-  exit 1
-fi
+# TN_ARGS="$DUT_DEVS" make -C "$NF_DIR" -f "$BENCH_MAKEFILE_NAME" build >"$LOG_FILE" 2>&1
+# if [ $? -ne 0 ]; then
+#   echo "[FATAL] Could not build; the $LOG_FILE file in the same directory as $0 may be useful"
+#   exit 1
+# fi
 
-# Before running the NF, ensure we'll clean up even on Ctrl+C
-trap_cleanup()
-{
-  echo '[bench] Ctrl+C detected, cleaning up'
-  cleanup
-  exit 1
-}
-trap 'trap_cleanup' 2
+# # Before running the NF, ensure we'll clean up even on Ctrl+C
+# trap_cleanup()
+# {
+#   echo '[bench] Ctrl+C detected, cleaning up'
+#   cleanup
+#   exit 1
+# }
+# trap 'trap_cleanup' 2
 
-TN_ARGS="$DUT_DEVS" taskset -c "$DUT_CPUS" make -C "$NF_DIR" -f "$BENCH_MAKEFILE_NAME" run >>"$LOG_FILE" 2>&1 &
-# Initialize if needed, but ignore all output including a missing target
-make -C "$NF_DIR" -f "$BENCH_MAKEFILE_NAME" init >'/dev/null' 2>&1
-# Sleep (as little as possible) if the NF needs a while to start
-for i in $(seq 1 30); do
-  sleep 1
-  NF_PID="$(pgrep -x "$NF_NAME")"
-  if [ ! -z "$NF_PID" ]; then
-    break
-  fi
-done
-if [ -z "$NF_PID" ]; then
-  echo "[FATAL] Could not launch the NF; the $LOG_FILE file in the same directory as $0 may be useful"
-  exit 1
-fi
+# TN_ARGS="$DUT_DEVS" taskset -c "$DUT_CPUS" make -C "$NF_DIR" -f "$BENCH_MAKEFILE_NAME" run >>"$LOG_FILE" 2>&1 &
+# # Initialize if needed, but ignore all output including a missing target
+# make -C "$NF_DIR" -f "$BENCH_MAKEFILE_NAME" init >'/dev/null' 2>&1
+# # Sleep (as little as possible) if the NF needs a while to start
+# for i in $(seq 1 30); do
+#   sleep 1
+#   NF_PID="$(pgrep -x "$NF_NAME")"
+#   if [ ! -z "$NF_PID" ]; then
+#     break
+#   fi
+# done
+# if [ -z "$NF_PID" ]; then
+#   echo "[FATAL] Could not launch the NF; the $LOG_FILE file in the same directory as $0 may be useful"
+#   exit 1
+# fi
 
-ssh "$TESTER_HOST" "cd $REMOTE_FOLDER_NAME; ./bench-tester.sh $@"
+# ssh "$TESTER_HOST" 
+# "cd $REMOTE_FOLDER_NAME; 
+"./bench-tester.sh $@"
 if [ $? -eq 0 ]; then
   scp -r "$TESTER_HOST:$REMOTE_FOLDER_NAME/results" . >/dev/null 2>&1
   if [ $? -eq 0 ]; then
