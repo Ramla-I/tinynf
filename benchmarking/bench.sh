@@ -124,7 +124,7 @@ fi
 # fi
 
 # Ensure we always kill the NF at the end, even in cases of failure
-cleanup
+# cleanup
 RESULT=1
 
 exit $RESULT
