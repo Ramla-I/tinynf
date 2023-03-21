@@ -111,7 +111,8 @@ fi
 
 # ssh "$TESTER_HOST" 
 # "cd $REMOTE_FOLDER_NAME; 
-"./bench-tester.sh $@"
+"pwd"
+./bench-tester.sh $@
 if [ $? -eq 0 ]; then
   # scp -r "$TESTER_HOST:$REMOTE_FOLDER_NAME/results" . >/dev/null 2>&1
   # if [ $? -eq 0 ]; then
