@@ -173,7 +173,9 @@ end
 
 -- Helper function, has to be global because it's started as a task
 function _throughputTask(txQueue, rxQueue, layer, duration, direction, flows, flowBatchSize, targetTx)
-  local i = 0;
+  local i = 0
+  local tx_final = 0
+
   while i < 10 do
     local mempool = memory.createMemPool(function(buf) packetInits[direction](buf, PACKET_SIZE) end)
     -- "nil" == no output
@@ -210,18 +212,20 @@ function _throughputTask(txQueue, rxQueue, layer, duration, direction, flows, fl
 
     local tx = txCounter.total
     local rx = rxCounter.total
-
+    tx_final = tx
     -- Sanity check; it's very easy to change the script and make it too expensive to generate 10 Gb/s
     if mg.running() and tx  < 0.98 * targetTx then
-      io.write(i .. ": [FATAL] Sent " .. tx .. " packets but expected at least " .. targetTx .. ", broken benchmark! Did you change the script and add too many per-packet operations?\n")
+      -- io.write(i .. ": [FATAL] Sent " .. tx .. " packets but expected at least " .. targetTx .. ", broken benchmark! Did you change the script and add too many per-packet operations?\n")
       -- os.exit(1)
     else
-	io.write(i .. ": succesful run \n")
+	    io.write(i .. ": succesful run \n")
       return (tx - rx) / tx
     end
 
   i = i + 1
   end
+  io.write(i .. ": [FATAL] Sent " .. tx_final .. " packets but expected at least " .. targetTx .. ", broken benchmark! Did you change the script and add too many per-packet operations?\n")
+  os.exit(1)
 end
 
 -- Starts a throughput-measuring task, which returns the loss (0 if no loss)
