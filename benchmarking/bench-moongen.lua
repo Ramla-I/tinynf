@@ -216,10 +216,11 @@ function _throughputTask(txQueue, rxQueue, layer, duration, direction, flows, fl
       io.write(i .. ": [FATAL] Sent " .. tx .. " packets but expected at least " .. targetTx .. ", broken benchmark! Did you change the script and add too many per-packet operations?\n")
       -- os.exit(1)
     else
+	io.write(i .. ": succesful run \n")
       return (tx - rx) / tx
     end
 
-  i += 1;
+  i = i + 1
   end
 end
 
