@@ -120,60 +120,10 @@ local packetInits = {
   end
 }
 
--- Helper function, has to be global because it's started as a task
--- Note that MoonGen doesn't want us to create more than one timestamper, so we do all iterations inside the task
-function _latencyTask(txQueue, rxQueue, layer, direction, flows, labels)
-  local counter = 0
-  local timestamper = ts:newUdpTimestamper(txQueue, rxQueue)
-  local measureFunc = function()
-    return timestamper:measureLatency(LATENCY_PACKETS_SIZE, function(buf)
-      packetInits[direction](buf, LATENCY_PACKETS_SIZE)
-      packetConfigs[direction][layer](buf:getUdpPacket(), counter)
-      counter = (counter + 1) % flows
-    end, 1) -- wait 1ms at most before declaring a packet lost, to avoid confusing old packets for new ones
-  end
-
-  local rateLimiter = timer:new(1 / LATENCY_PACKETS_PER_SECOND)
-
-  -- Heatup part
-  local heatupTimer = timer:new(LATENCY_HEATUP_DURATION / 1000)
-  while heatupTimer:running() and mg.running() do
-    measureFunc()
-    rateLimiter:wait()
-    rateLimiter:reset()
-  end
-
-  local sendTimer = timer:new(LATENCY_DURATION / 1000)
-  local results = {}
-  for i = 1, #labels do
-    mg.sleepMillis(LATENCY_TIME_PADDING)
-    rateLimiter:reset()
-    sendTimer:reset()
-    counter = 0
-
-    local lats = {}
-    while sendTimer:running() and mg.running() do
-      lats[#lats+1] = measureFunc()
-      rateLimiter:wait()
-      rateLimiter:reset()
-    end
-    results[#results+1] = lats
-    io.write("[bench] " .. labels[i] .. ": " .. summarizeLatencies(lats) .. "\n")
-    io.flush()
-    mg.sleepMillis(LATENCY_TIME_PADDING)
-  end
-
-  return results
-end
-
--- Starts a latency-measuring task, which returns #labels histograms, sleeping 100ms inbetween measurements
-function startMeasureLatency(txQueue, rxQueue, layer, direction, flows, labels)
-  return mg.startTask("_latencyTask", txQueue, rxQueue, layer, direction, flows, labels)
-end
 
 -- Helper function, has to be global because it's started as a task
-function _throughputTask(txQueue, rxQueue, layer, duration, direction, flows, flowBatchSize, targetTx)
-  local mempool = memory.createMemPool(function(buf) packetInits[direction](buf, PACKET_SIZE) end)
+function _throughputTask(txQueue, rxQueue, layer, duration, direction, flows, flowBatchSize, targetTx, packetSize)
+  local mempool = memory.createMemPool(function(buf) packetInits[direction](buf, packetSize) end)
   -- "nil" == no output
   local txCounter = stats:newDevTxCounter(txQueue, "nil")
   local rxCounter = stats:newDevRxCounter(rxQueue, "nil")
@@ -184,7 +134,7 @@ function _throughputTask(txQueue, rxQueue, layer, duration, direction, flows, fl
   local batchCounter = 0
 
   while sendTimer:running() and mg.running() do
-    bufs:alloc(PACKET_SIZE)
+    bufs:alloc(packetSize)
     for _, buf in ipairs(bufs) do
       packetConfig(buf:getUdpPacket(), counter)
       batchCounter = batchCounter + 1
@@ -219,7 +169,7 @@ function _throughputTask(txQueue, rxQueue, layer, duration, direction, flows, fl
 end
 
 -- Starts a throughput-measuring task, which returns the loss (0 if no loss)
-function startMeasureThroughput(txQueue, rxQueue, rate, layer, duration, direction, flows, flowBatchSize)
+function startMeasureThroughput(txQueue, rxQueue, rate, layer, duration, direction, flows, flowBatchSize, packetSize)
   -- Get the rate that should be given to MoonGen
   -- using packets of the given size to achieve the given true rate
   function moongenRate(rate)
@@ -236,8 +186,8 @@ function startMeasureThroughput(txQueue, rxQueue, rate, layer, duration, directi
     -- let's avoid floats...
     -- Furthermore, it seems from tests that rates less than 10 are just ignored...
     local byteRate = rate * 1024 * 1024 / 8
-    local packetsPerSec = byteRate / (PACKET_SIZE + 24)
-    local moongenByteRate = packetsPerSec * (PACKET_SIZE + 4)
+    local packetsPerSec = byteRate / (packetSize + 24)
+    local moongenByteRate = packetsPerSec * (packetSize + 4)
     local moongenRate = moongenByteRate * 8 / (1024 * 1024)
     if moongenRate < 10 then
       printf("WARNING - Rate %f (corresponding to desired rate %d) too low, will be set to 10 instead.", moongenRate, rate)
@@ -247,8 +197,8 @@ function startMeasureThroughput(txQueue, rxQueue, rate, layer, duration, directi
   end
 
   txQueue:setRate(moongenRate(rate))
-  local targetTx = (rate * 1000 * 1000) / ((PACKET_SIZE + 24) * 8) * (duration / 1000)
-  return mg.startTask("_throughputTask", txQueue, rxQueue, layer, duration, direction, flows, flowBatchSize, targetTx)
+  local targetTx = (rate * 1000 * 1000) / ((packetSize + 24) * 8) * (duration / 1000)
+  return mg.startTask("_throughputTask", txQueue, rxQueue, layer, duration, direction, flows, flowBatchSize, targetTx, packetSize)
 end
 
 
@@ -256,7 +206,7 @@ end
 function heatUp(queuePair, layer, flows, ignoreloss)
   io.write("[bench] Heating up...\n")
   io.flush()
-  local task = startMeasureThroughput(queuePair.tx, queuePair.rx, HEATUP_RATE, layer, HEATUP_DURATION, queuePair.direction, flows, HEATUP_BATCH_SIZE)
+  local task = startMeasureThroughput(queuePair.tx, queuePair.rx, HEATUP_RATE, layer, HEATUP_DURATION, queuePair.direction, flows, HEATUP_BATCH_SIZE, PACKET_SIZE)
   local loss = task:wait()
   if not ignoreloss and loss > 0.01 then
     io.write("[FATAL] Heatup lost " .. (loss * 100) .. "% of packets!\n")
@@ -274,135 +224,61 @@ function measureStandard(queuePairs, extraPair, args)
     heatUp(queuePairs[99], args.layer, args.flows, true) -- 99 is a hack, see master function
   end
   heatUp(queuePairs[1], args.layer, args.flows, false)
-
-  local upperBound = RATE_MAX
-  local lowerBound = RATE_MIN
-  local rate = upperBound
-  local bestRate = 0
-  local bestTx = 0
-  for i = 1, THROUGHPUT_STEPS_COUNT do
-    io.write("[bench] Step " .. i .. ": " .. (#queuePairs * rate) .. " Mbps... ")
-    local tasks = {}
-    for i, pair in ipairs(queuePairs) do
-      tasks[i] = startMeasureThroughput(pair.tx, pair.rx, rate, args.layer, THROUGHPUT_STEPS_DURATION, pair.direction, args.flows, 1)
-    end
-
-    local loss = 0
-    for _, task in ipairs(tasks) do
-      loss = loss + task:wait()
-    end
-
-    loss = loss / #queuePairs
-
-    -- We may have been interrupted
-    if not mg.running() then
-      io.write("Interrupted\n")
-      os.exit(0)
-    end
-
-    io.write("loss = " .. loss .. "\n")
-    io.flush()
-
-    if (loss <= args.acceptableloss) then
-      bestRate = rate
-      bestTx = tx
-      lowerBound = rate
-      rate = rate + (upperBound - rate)/2
-    else
-      upperBound = rate
-      rate = lowerBound + (rate - lowerBound)/2
-    end
-
-    -- Stop if the first step is already successful, let's not do pointless iterations
-    if (i == THROUGHPUT_STEPS_COUNT) or (loss <= args.acceptableloss and bestRate == upperBound) then
-      -- Note that we write 'bestRate' here, i.e. the last rate with acceptable loss, not the current one
-      -- (which may cause unacceptable loss since our binary search is bounded in steps)
-      local tputFile = io.open(RESULTS_FOLDER_NAME .. "/" .. RESULTS_THROUGHPUT_FILE_NAME, "w")
-      tputFile:write(math.floor(#queuePairs * bestRate) .. "\n")
-      tputFile:close()
-      break
-    end
-  end
-
-  -- don't do latency if explicitly asked not to
-  if args.latencyload == -1 then
-    return
-  end
-
-  local latencyRates = {}
-  local currentGuess = 0
-  while currentGuess <= bestRate do
-    latencyRates[#latencyRates+1] = currentGuess
-    currentGuess = currentGuess + LATENCY_LOAD_INCREMENT
-  end
-  if currentGuess - LATENCY_LOAD_INCREMENT ~= bestRate then
-    latencyRates[#latencyRates+1] = bestRate
-  end
-
-  -- override if necessary, see description of the parser option
-  if args.latencyload ~= -2 then
-    latencyRates = {args.latencyload / #queuePairs}
-  end
-
-  local latencyLabels = {}
-  for i, rate in ipairs(latencyRates) do
-    if rate == 0 then
-      latencyLabels[i] = "Zero Mb/s" -- so that results are aligned; 'zero' has same width as a 4-digit number
-    else
-      latencyLabels[i] = "" .. (rate * #queuePairs) .. " Mb/s"
-    end
-  end
-
-  io.write("[bench] Measuring latency...\n")
-  local latencyTask = startMeasureLatency(extraPair.tx, extraPair.rx, args.layer, extraPair.direction, args.flows, latencyLabels)
-  mg.sleepMillis(LATENCY_HEATUP_DURATION)
-
-  for r, rate in ipairs(latencyRates) do
-    local throughputTasks = {}
-    local loss = 0
-
-    if rate == 0 then
-      mg.sleepMillis(LATENCY_DURATION + LATENCY_TIME_PADDING * 2)
-    else
+  
+  local packetSizesBytes = {64 - 4, 128 - 4, 256 - 4, 512 - 4, 1024 - 4, 1518 - 4} 
+  for _, pktSize in ipairs(packetSizesBytes) do
+    local upperBound = RATE_MAX
+    local lowerBound = RATE_MIN
+    local rate = upperBound
+    local bestRate = 0
+    local bestTx = 0
+    for i = 1, THROUGHPUT_STEPS_COUNT do
+      io.write("[bench] Step " .. i .. ": " .. (#queuePairs * rate) .. " Mbps... ")
+      local tasks = {}
       for i, pair in ipairs(queuePairs) do
-        throughputTasks[i] = startMeasureThroughput(pair.tx, pair.rx, rate - LATENCY_LOAD_PADDING, args.layer, LATENCY_DURATION + LATENCY_TIME_PADDING * 2, pair.direction, args.flows, 1)
+        tasks[i] = startMeasureThroughput(pair.tx, pair.rx, rate, args.layer, THROUGHPUT_STEPS_DURATION, pair.direction, args.flows, 1, pktSize)
       end
-      for _, task in ipairs(throughputTasks) do
+
+      local loss = 0
+      for _, task in ipairs(tasks) do
         loss = loss + task:wait()
       end
-    end
 
-    -- We may have been interrupted
-    if not mg.running() then
-      io.write("Interrupted\n")
-      os.exit(0)
-    end
+      loss = loss / #queuePairs
 
-    if (loss / #queuePairs) > args.acceptableloss then
-      io.write("[FATAL] Too much loss! (" .. (loss / #queuePairs) .. ")\n")
-      os.exit(1)
-    end
-  end
+      -- We may have been interrupted
+      if not mg.running() then
+        io.write("Interrupted\n")
+        os.exit(0)
+      end
 
-  local latss = latencyTask:wait()
-  for r, rate in ipairs(latencyRates) do
-    dumpLatencies(latss[r], RESULTS_FOLDER_NAME .. "/" .. RESULTS_LATENCIES_FOLDER_NAME .. "/" .. (rate * #queuePairs))
+      io.write("loss = " .. loss .. "\n")
+      io.flush()
+
+      if (loss <= args.acceptableloss) then
+        bestRate = rate
+        bestTx = tx
+        lowerBound = rate
+        rate = rate + (upperBound - rate)/2
+      else
+        upperBound = rate
+        rate = lowerBound + (rate - lowerBound)/2
+      end
+
+      -- Stop if the first step is already successful, let's not do pointless iterations
+      if (i == THROUGHPUT_STEPS_COUNT) or (loss <= args.acceptableloss and bestRate == upperBound) then
+        -- Note that we write 'bestRate' here, i.e. the last rate with acceptable loss, not the current one
+        -- (which may cause unacceptable loss since our binary search is bounded in steps)
+        local tputFile = io.open(RESULTS_FOLDER_NAME .. "/" .. RESULTS_THROUGHPUT_FILE_NAME, "w")
+        tputFile:write(pktSize .. ": ")
+        tputFile:write(math.floor(#queuePairs * bestRate) .. "\n")
+        tputFile:close()
+        break
+      end
+    end
   end
 end
 
-function flood(queuePairs, extraPair, args)
-  io.write("[bench] Flooding. Stop with Ctrl+C.\n")
-  io.flush()
-
-  local tasks = {}
-  for i, pair in ipairs(queuePairs) do
-    tasks[i] = startMeasureThroughput(pair.tx, pair.rx, 10 * 1000, args.layer, 10 * 1000 * 1000, pair.direction, args.flows, 1) -- 10M seconds counts as forever in my book
-  end
-
-  for _, task in ipairs(tasks) do
-    task:wait()
-  end
-end
 
 function master(args)
   -- We have 2 devices, and can thus do two kinds of benchmarks:
