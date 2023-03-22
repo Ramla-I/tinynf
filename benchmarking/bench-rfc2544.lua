@@ -279,9 +279,8 @@ function measureStandard(queuePairs, extraPair, args)
       if (i == THROUGHPUT_STEPS_COUNT) or (loss <= args.acceptableloss and bestRate == upperBound) then
         -- Note that we write 'bestRate' here, i.e. the last rate with acceptable loss, not the current one
         -- (which may cause unacceptable loss since our binary search is bounded in steps)
-        local tputFile = io.open(RESULTS_FOLDER_NAME .. "/" .. RESULTS_THROUGHPUT_FILE_NAME, "w")
-        tputFile:write(pktSize .. ": ")
-        tputFile:write(math.floor(#queuePairs * bestRate) .. "\n")
+        local tputFile = io.open(RESULTS_FOLDER_NAME .. "/" .. RESULTS_THROUGHPUT_FILE_NAME, "a")
+        tputFile:write(pktSize .. ": " .. math.floor(#queuePairs * bestRate) .. "\n")
         tputFile:close()
         break
       end
@@ -337,7 +336,7 @@ function master(args)
   end
 
   -- lua doesn't have a built-in cross-plat way to do folders
-  os.execute("rm -rf '" .. RESULTS_FOLDER_NAME .. "'")
+  os.execute("sudo rm -rf '" .. RESULTS_FOLDER_NAME .. "'")
   os.execute("mkdir -p '" .. RESULTS_FOLDER_NAME .. "/" .. RESULTS_LATENCIES_FOLDER_NAME .. "'")
 
   measureFunc(queuePairs, extraPair, args)
