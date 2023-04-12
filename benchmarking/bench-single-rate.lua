@@ -10,7 +10,7 @@ local ts      = require "timestamping"
 local PACKET_SIZE = 60 -- packets
 local PACKET_BATCH_SIZE = 64 -- packets
 
-local THROUGHPUT_STEPS_DURATION = 30000 -- milliseconds
+local THROUGHPUT_STEPS_DURATION = 300000 -- milliseconds
 local THROUGHPUT_STEPS_COUNT = 10 -- number of trials
 
 local RATE_MIN = 0 -- Mbps
@@ -42,6 +42,7 @@ function configure(parser)
   parser:option("-f --flows", "Number of flows to use, defaults to 60,000"):default(60000):convert(tonumber)
   parser:flag("-x --xchange", "Exchange order of devices, in case you messed up your wiring")
   parser:flag("-r --reverseheatup", "Add heatup in reverse, for Maglev-like load balancers; only for standard-single")
+  parser:option("-t --throughput", "the single throughput rate at which to generate the load"):default(10000):convert(tonumber)
 end
 
 -- Helper function to summarize latencies: min, max, median, stdev, 99th
@@ -235,15 +236,16 @@ function measureStandard(queuePairs, extraPair, args)
   end
   heatUp(queuePairs[1], args.layer, args.flows, false)
   
-  local packetSizesBytes = {64 - 4, 128 - 4, 256 - 4, 512 - 4, 1024 - 4, 1518 - 4} 
+  local packetSizesBytes = {64 - 4} 
   for _, pktSize in ipairs(packetSizesBytes) do
     local upperBound = RATE_MAX
     local lowerBound = RATE_MIN
-    local rate = upperBound
+    local rate = args.throughput / 2 
     local bestRate = 0
     local bestTx = 0
     for i = 1, THROUGHPUT_STEPS_COUNT do
       io.write("[bench] Step " .. i .. ": " .. (#queuePairs * rate) .. " Mbps... ")
+      io.flush()
       local tasks = {}
       for i, pair in ipairs(queuePairs) do
         tasks[i] = startMeasureThroughput(pair.tx, pair.rx, rate, args.layer, THROUGHPUT_STEPS_DURATION, pair.direction, args.flows, 1, pktSize)
@@ -264,26 +266,6 @@ function measureStandard(queuePairs, extraPair, args)
 
       io.write("loss = " .. loss .. "\n")
       io.flush()
-
-      if (loss <= args.acceptableloss) then
-        bestRate = rate
-        bestTx = tx
-        lowerBound = rate
-        rate = rate + (upperBound - rate)/2
-      else
-        upperBound = rate
-        rate = lowerBound + (rate - lowerBound)/2
-      end
-
-      -- Stop if the first step is already successful, let's not do pointless iterations
-      if (i == THROUGHPUT_STEPS_COUNT) or (loss <= args.acceptableloss and bestRate == upperBound) then
-        -- Note that we write 'bestRate' here, i.e. the last rate with acceptable loss, not the current one
-        -- (which may cause unacceptable loss since our binary search is bounded in steps)
-        local tputFile = io.open(RESULTS_FOLDER_NAME .. "/" .. RESULTS_THROUGHPUT_FILE_NAME, "a")
-        tputFile:write(pktSize .. ": " .. math.floor(#queuePairs * bestRate) .. "\n")
-        tputFile:close()
-        break
-      end
     end
   end
 end

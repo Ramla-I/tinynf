@@ -11,11 +11,11 @@ export DUT_DEVS='83:00.0 85:00.0'
 export TESTER_HOST='icnalsp3s3'
 # 0-based index of the CPUs on which the packet generator can run
 # As many as possible, but should be on the same socket as the NICs
-export TESTER_CPUS=0,1,2,3,4,5,6,7
+export TESTER_CPUS=4,6,8,10,12,14,16,18
 # PCI BDF addresses of the tester's NICs
 export TESTER_DEVS='d2c1:00:00.0 e215:00:00.0'
 # 1 if you messed up your wiring and crossed the cables, 0 otherwise
-export TESTER_CABLES_CROSSED=1
+export TESTER_CABLES_CROSSED=0
 
 # Name of the local log file containing the build and run output
 export LOG_FILE='bench.log'
