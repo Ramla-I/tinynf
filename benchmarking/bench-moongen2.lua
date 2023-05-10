@@ -325,7 +325,7 @@ function measureStandard(queuePairs, extraPair, args)
   end
 
   -- don't do latency if explicitly asked not to
-  if args.latencyload == -1 then
+  if args.latencyload == 0 then
     return
   end
 
@@ -333,9 +333,11 @@ function measureStandard(queuePairs, extraPair, args)
   local currentGuess = 0
   while currentGuess <= bestRate do
     latencyRates[#latencyRates+1] = currentGuess
+    latencyRates[#latencyRates+1] = currentGuess
     currentGuess = currentGuess + LATENCY_LOAD_INCREMENT
   end
   if currentGuess - LATENCY_LOAD_INCREMENT ~= bestRate then
+    latencyRates[#latencyRates+1] = bestRate
     latencyRates[#latencyRates+1] = bestRate
   end
 

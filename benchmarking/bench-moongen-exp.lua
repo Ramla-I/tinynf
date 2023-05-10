@@ -23,7 +23,7 @@ local HEATUP_BATCH_SIZE = 8 -- packets
 
 local LATENCY_DURATION = 30000 -- milliseconds
 local LATENCY_HEATUP_DURATION = 5000 -- milliseconds; discarded latency measurements
-local LATENCY_PACKETS_PER_SECOND = 1000 -- packets; not too much or MoonGen gets very confused
+local LATENCY_PACKETS_PER_SECOND = 500 -- packets; not too much or MoonGen gets very confused
 local LATENCY_PACKETS_SIZE = 84 -- bytes, minimum 84
 local LATENCY_LOAD_INCREMENT = 500 -- Mbps
 local LATENCY_LOAD_PADDING   = 100 -- Mbps; removed from max load when measuring latency
