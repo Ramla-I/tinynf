@@ -38,7 +38,7 @@ NF_NAME="$(make -C "$NF_DIR" -f "$BENCH_MAKEFILE_NAME" -s print-nf-name)" # -s t
 cleanup()
 {
   sudo pkill -x -9 "$NF_NAME" >/dev/null 2>&1;
-  ssh "$TESTER_HOST" "sudo pkill -9 MoonGen"
+#  ssh "$TESTER_HOST" "sudo pkill -9 MoonGen"
 }
 
 # Clean up already, in case some old stuff is still running
@@ -125,5 +125,6 @@ fi
 
 # Ensure we always kill the NF at the end, even in cases of failure
 cleanup
+RESULT = 1
 
 exit $RESULT
