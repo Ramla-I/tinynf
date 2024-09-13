@@ -534,17 +534,24 @@ bool tn_net_device_init(const struct tn_pci_address pci_address, struct tn_net_d
 	// Section 8.2.2 Registers Summary PF - BAR 0: As the section title indicate, registers are at the address pointed to by BAR 0, which is the only one we care about
 	uint32_t pci_bar0low = pcireg_read(pci_address, PCIREG_BAR0_LOW);
 	// Sanity check: a 64-bit BAR must have bit 2 of low as 1 and bit 1 of low as 0 as per Table 9-4 Base Address Registers' Fields
+	bool bar0_is_32 = false;
 	if ((pci_bar0low & BIT(2)) == 0 || (pci_bar0low & BIT(1)) != 0) {
 		TN_DEBUG("BAR0 is not a 64-bit BAR");
-		return false;
+		// return false;
+		bar0_is_32 = true;
 	}
 	uint32_t pci_bar0high = pcireg_read(pci_address, PCIREG_BAR0_HIGH);
 	// No need to detect the size, since we know exactly which device we're dealing with. (This also means no writes to BARs, one less chance to mess everything up)
 
 	struct tn_net_device device = { 0 };
 	// Section 9.3.6.1 Memory and IO Base Address Registers:
-	// As indicated in Table 9-4, the low 4 bits are read-only and not part of the address
-	uint64_t dev_phys_addr = (((uint64_t) pci_bar0high) << 32) | (pci_bar0low & ~BITS(0,3));
+	// As indicated in Table 9-4, the low 4 bits are read-only and not part of the address	
+	uint64_t dev_phys_addr = 0;
+	if (bar0_is_32) {
+		dev_phys_addr = (uint64_t) (pci_bar0low & ~BITS(0,3));
+	} else {	
+		dev_phys_addr = (((uint64_t) pci_bar0high) << 32) | (pci_bar0low & ~BITS(0,3));
+	}
 	// Section 8.1 Address Regions: "Region Size" of "Internal registers memories and Flash (memory BAR)" is "128 KB + Flash_Size"
 	// Thus we can ask for 128KB, since we don't know the flash size (and don't need it thus no need to actually check it)
 	if (!tn_mem_phys_to_virt(dev_phys_addr, 128 * 1024, &device.addr)) {
